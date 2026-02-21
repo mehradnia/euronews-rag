@@ -8,6 +8,7 @@ from src.config.settings import settings
 class InferenceService:
     def __init__(self) -> None:
         self._client = InferenceClient(
+            provider="auto",
             token=settings.hf_api_token,
         )
 

@@ -10,8 +10,10 @@ packages = [{ include = "src" }]
 python = "^3.12"
 fastapi = "^0.115"
 uvicorn = { version = "^0.34", extras = ["standard"] }
-huggingface-hub = "^0.28"
+huggingface-hub = "^1.4"
 pydantic-settings = "^2.7"
+sqlalchemy = { version = "^2.0", extras = ["asyncio"] }
+asyncpg = "^0.30"
 
 [build-system]
 requires = ["poetry-core"]

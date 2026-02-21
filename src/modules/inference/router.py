@@ -1,4 +1,5 @@
 import json
+import logging
 
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
@@ -6,6 +7,8 @@ from fastapi.responses import StreamingResponse
 from src.modules.inference.models import ALLOWED_MODELS, DEFAULT_MODEL, is_model_allowed
 from src.modules.inference.schemas import ChatRequest, ModelResponse
 from src.modules.inference.service import inference_service
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -30,13 +33,17 @@ async def chat(request: ChatRequest) -> StreamingResponse:
     messages = [msg.model_dump() for msg in request.messages]
 
     async def event_stream():
-        async for token in inference_service.stream_chat(
-            messages=messages,
-            model=request.model,
-            temperature=request.temperature,
-            max_tokens=request.max_tokens,
-        ):
-            yield f"data: {json.dumps({'token': token})}\n\n"
+        try:
+            async for token in inference_service.stream_chat(
+                messages=messages,
+                model=request.model,
+                temperature=request.temperature,
+                max_tokens=request.max_tokens,
+            ):
+                yield f"data: {json.dumps({'token': token})}\n\n"
+        except Exception as exc:
+            logger.exception("Inference error for model %s", request.model)
+            yield f"data: {json.dumps({'error': str(exc)})}\n\n"
         yield "data: [DONE]\n\n"
 
     return StreamingResponse(

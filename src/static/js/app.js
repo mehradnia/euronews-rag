@@ -3,8 +3,18 @@ const chatForm = document.getElementById("chatForm");
 const messageInput = document.getElementById("messageInput");
 const sendBtn = document.getElementById("sendBtn");
 const modelSelect = document.getElementById("modelSelect");
+const themeToggle = document.getElementById("themeToggle");
+const sunIcon = document.getElementById("sunIcon");
+const moonIcon = document.getElementById("moonIcon");
 
 const conversationHistory = [];
+
+const MESSAGE_BASE =
+    "max-w-[80%] rounded-lg px-4 py-3 text-[15px] leading-relaxed whitespace-pre-wrap break-words";
+const MESSAGE_CLASSES = {
+    user: `${MESSAGE_BASE} self-end bg-primary text-primary-foreground rounded-br-sm`,
+    assistant: `${MESSAGE_BASE} self-start bg-muted text-foreground rounded-bl-sm`,
+};
 
 // Load available models on startup
 async function loadModels() {
@@ -49,8 +59,11 @@ messageInput.addEventListener("input", () => {
 });
 
 function appendMessage(role, content) {
+    const emptyState = document.getElementById("emptyState");
+    if (emptyState) emptyState.remove();
+
     const div = document.createElement("div");
-    div.className = `message ${role}`;
+    div.className = MESSAGE_CLASSES[role];
     div.textContent = content;
     chatMessages.appendChild(div);
     chatMessages.scrollTop = chatMessages.scrollHeight;
@@ -69,8 +82,14 @@ async function sendMessage(text) {
     messageInput.disabled = true;
     modelSelect.disabled = true;
 
-    // Create assistant message bubble
+    // Create assistant message bubble with typing indicator
     const assistantDiv = appendMessage("assistant", "");
+    assistantDiv.innerHTML = `
+        <span class="inline-flex gap-1 items-center">
+            <span class="size-1.5 rounded-full bg-current animate-bounce [animation-delay:-0.3s]"></span>
+            <span class="size-1.5 rounded-full bg-current animate-bounce [animation-delay:-0.15s]"></span>
+            <span class="size-1.5 rounded-full bg-current animate-bounce"></span>
+        </span>`;
 
     try {
         const response = await fetch("/api/inference/chat", {
@@ -106,6 +125,12 @@ async function sendMessage(text) {
 
                 try {
                     const parsed = JSON.parse(data);
+                    if (parsed.error) {
+                        assistantDiv.textContent = `Error: ${parsed.error}`;
+                        conversationHistory.pop(); // remove failed user message
+                        return;
+                    }
+                    if (!fullResponse) assistantDiv.textContent = "";
                     fullResponse += parsed.token;
                     assistantDiv.textContent = fullResponse;
                     chatMessages.scrollTop = chatMessages.scrollHeight;
@@ -125,3 +150,23 @@ async function sendMessage(text) {
         messageInput.focus();
     }
 }
+
+// Dark mode toggle
+function setTheme(dark) {
+    document.documentElement.classList.toggle("dark", dark);
+    sunIcon.classList.toggle("hidden", !dark);
+    moonIcon.classList.toggle("hidden", dark);
+    localStorage.setItem("theme", dark ? "dark" : "light");
+}
+
+const storedTheme = localStorage.getItem("theme");
+if (
+    storedTheme === "dark" ||
+    (!storedTheme && window.matchMedia("(prefers-color-scheme: dark)").matches)
+) {
+    setTheme(true);
+}
+
+themeToggle.addEventListener("click", () => {
+    setTheme(!document.documentElement.classList.contains("dark"));
+});

@@ -23,8 +23,8 @@ ALLOWED_MODELS: dict[str, ModelInfo] = {m.id: m for m in [
     # Google — Gemma 3
     ModelInfo("google/gemma-3-27b-it", "Gemma 3 27B", "Google"),
 
-    # Mistral
-    ModelInfo("mistralai/Mistral-7B-Instruct-v0.3", "Mistral 7B v0.3", "Mistral"),
+    # Meta — Llama 3
+    ModelInfo("meta-llama/Llama-3.3-70B-Instruct", "Llama 3.3 70B", "Meta"),
 ]}
 
 DEFAULT_MODEL = "meta-llama/Llama-4-Scout-17B-16E-Instruct"
