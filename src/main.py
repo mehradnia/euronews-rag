@@ -5,21 +5,30 @@ from pathlib import Path
 from fastapi import FastAPI
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
+from sqlalchemy import text
+
 from src.config.database import Base, engine
 from src.modules.conversation.router import router as conversation_router
+from src.modules.data_collector_pipeline.service import data_collector_pipeline_service
 from src.modules.inference.router import router as inference_router
 
+logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    import src.modules.conversation.models  # noqa: F401 — register ORM models
+    import src.modules.persistence.models  # noqa: F401 — register ORM models
 
     async with engine.begin() as conn:
+        await conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
         await conn.run_sync(Base.metadata.create_all)
     logger.info("Database tables synced")
+
+    await data_collector_pipeline_service.start()
+
     yield
+    await data_collector_pipeline_service.stop()
     await engine.dispose()
 
 

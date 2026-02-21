@@ -1,15 +1,13 @@
 import json
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
-from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.config.database import get_db
-from src.modules.conversation import service as conversation_service
 from src.modules.inference.models import ALLOWED_MODELS, DEFAULT_MODEL, is_model_allowed
 from src.modules.inference.schemas import ChatRequest, ModelResponse
 from src.modules.inference.service import inference_service
+from src.modules.persistence.service import persistence_service
 
 logger = logging.getLogger(__name__)
 
@@ -26,16 +24,14 @@ async def list_models() -> dict:
 
 
 @router.post("/chat")
-async def chat(
-    request: ChatRequest, db: AsyncSession = Depends(get_db)
-) -> StreamingResponse:
+async def chat(request: ChatRequest) -> StreamingResponse:
     if not is_model_allowed(request.model_id):
         raise HTTPException(
             status_code=422,
             detail=f"Model '{request.model_id}' is not supported.",
         )
 
-    conversation = await conversation_service.get_conversation(db, request.conversation_id)
+    conversation = await persistence_service.get_conversation(request.conversation_id)
     if not conversation:
         raise HTTPException(status_code=404, detail="Conversation not found")
 
@@ -47,8 +43,8 @@ async def chat(
     messages = [{"role": "user", "content": request.content}]
 
     # Persist user message
-    await conversation_service.add_message(
-        db, request.conversation_id, role="user", content=request.content
+    await persistence_service.add_message(
+        request.conversation_id, role="user", content=request.content
     )
 
     async def event_stream():
@@ -68,8 +64,8 @@ async def chat(
         else:
             assistant_content = "".join(full_response)
             if assistant_content:
-                await conversation_service.add_message(
-                    db, request.conversation_id, role="assistant",
+                await persistence_service.add_message(
+                    request.conversation_id, role="assistant",
                     content=assistant_content, model_id=request.model_id,
                 )
         yield "data: [DONE]\n\n"
