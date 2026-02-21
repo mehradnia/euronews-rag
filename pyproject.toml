@@ -1,0 +1,18 @@
+[tool.poetry]
+name = "text-analysis"
+version = "0.1.0"
+description = "RAG pipeline application with streaming inference API"
+authors = []
+readme = "README.md"
+packages = [{ include = "src" }]
+
+[tool.poetry.dependencies]
+python = "^3.12"
+fastapi = "^0.115"
+uvicorn = { version = "^0.34", extras = ["standard"] }
+huggingface-hub = "^0.28"
+pydantic-settings = "^2.7"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

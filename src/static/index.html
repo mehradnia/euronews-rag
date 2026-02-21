@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Text Analysis — Chat</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <div class="chat-container">
+        <header class="chat-header">
+            <h1>Text Analysis</h1>
+            <select id="modelSelect" disabled>
+                <option>Loading models...</option>
+            </select>
+        </header>
+
+        <div class="chat-messages" id="chatMessages"></div>
+
+        <form class="chat-input" id="chatForm">
+            <textarea
+                id="messageInput"
+                placeholder="Type your message..."
+                rows="1"
+                autofocus
+            ></textarea>
+            <button type="submit" id="sendBtn">Send</button>
+        </form>
+    </div>
+
+    <script src="/static/js/app.js"></script>
+</body>
+</html>
