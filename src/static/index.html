@@ -4,6 +4,13 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Text Analysis — Chat</title>
+
+    <!-- highlight.js themes (light + dark) -->
+    <link id="hljs-light" rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/atom-one-light.min.css">
+    <link id="hljs-dark" rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/atom-one-dark.min.css" disabled>
+    <!-- KaTeX -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16/dist/katex.min.css">
+
     <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
     <style type="text/tailwindcss">
         :root {
@@ -75,80 +82,283 @@
         body {
             font-family: ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji";
         }
+
+        /* Custom scrollbar */
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: var(--muted-foreground); }
+
+        /* ── Chat markdown (mirrors PiPro globals.css) ── */
+        .chat-markdown {
+            max-width: 100%;
+            overflow-wrap: break-word;
+            word-wrap: break-word;
+            word-break: break-word;
+            line-height: 1.7;
+        }
+
+        .chat-markdown code:not(pre code) {
+            background: color-mix(in oklch, var(--primary) 10%, transparent);
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+        }
+
+        .chat-markdown pre { margin: 0.75rem 0; }
+        .chat-markdown pre code {
+            font-size: 0.875rem;
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+            display: block;
+            white-space: pre;
+            word-wrap: normal;
+            overflow-wrap: normal;
+        }
+
+        .chat-markdown h1, .chat-markdown h2, .chat-markdown h3,
+        .chat-markdown h4, .chat-markdown h5, .chat-markdown h6 {
+            font-weight: 600;
+            overflow-wrap: break-word;
+            margin-top: 1.5em;
+            margin-bottom: 0.75em;
+        }
+        .chat-markdown > h1:first-child, .chat-markdown > h2:first-child,
+        .chat-markdown > h3:first-child, .chat-markdown > h4:first-child,
+        .chat-markdown > h5:first-child, .chat-markdown > h6:first-child { margin-top: 0; }
+
+        .chat-markdown p { overflow-wrap: break-word; margin-bottom: 1em; }
+        .chat-markdown p:last-child { margin-bottom: 0; }
+
+        .chat-markdown a {
+            color: var(--primary);
+            text-decoration: underline;
+            text-underline-offset: 2px;
+        }
+        .chat-markdown a:hover { opacity: 0.8; }
+
+        .chat-markdown blockquote {
+            border-left: 4px solid color-mix(in oklch, var(--primary) 30%, transparent);
+            padding-left: 1rem;
+            font-style: italic;
+            color: var(--muted-foreground);
+            margin: 1em 0;
+        }
+
+        .chat-markdown ul, .chat-markdown ol { margin-left: 1rem; margin-top: 0.75em; margin-bottom: 0.75em; }
+        .chat-markdown li { margin-top: 0.25rem; margin-bottom: 0.25rem; }
+        .chat-markdown ul { list-style-type: disc; }
+        .chat-markdown ol { list-style-type: decimal; }
+
+        .chat-markdown > *:first-child { margin-top: 0; }
+        .chat-markdown > *:last-child { margin-bottom: 0; }
+
+        .chat-markdown table { border-collapse: collapse; width: 100%; margin: 0.75rem 0; display: block; overflow-x: auto; max-width: 100%; }
+        .chat-markdown th, .chat-markdown td { border: 1px solid var(--border); padding: 0.5rem 0.75rem; }
+        .chat-markdown th { background: var(--muted); font-weight: 600; }
+
+        .chat-markdown .katex { font-size: 1.05em; }
+        .chat-markdown .katex-display { margin: 1rem 0; overflow-x: auto; }
+
+        /* Thinking collapsible block */
+        .think-block { border: 1px solid var(--border); border-radius: 0.5rem; overflow: hidden; }
+        .think-summary {
+            display: flex; align-items: center; gap: 0.5rem;
+            padding: 0.5rem 0.75rem; font-size: 0.75rem; font-weight: 500;
+            color: var(--muted-foreground); cursor: pointer; user-select: none;
+            background: color-mix(in oklch, var(--muted) 40%, transparent);
+            transition: background 0.15s;
+        }
+        .think-summary:hover { background: color-mix(in oklch, var(--muted) 70%, transparent); }
+        .think-summary::marker, .think-summary::-webkit-details-marker { display: none; }
+        .think-preview {
+            flex: 1; min-width: 0;
+            overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+            opacity: 0.6; font-weight: 400;
+        }
+        details[open] .think-preview { display: none; }
+        .think-content {
+            padding: 0.75rem; font-size: 0.8125rem; color: var(--muted-foreground);
+            border-top: 1px solid var(--border);
+        }
+
+        /* Code block wrapper */
+        .code-block-header {
+            display: flex; align-items: center; justify-content: space-between;
+            background: color-mix(in oklch, var(--muted) 50%, transparent);
+            border: 1px solid var(--border); border-radius: 0.5rem 0.5rem 0 0;
+            padding: 0.5rem 1rem;
+        }
+        .code-block-header span { font-size: 0.75rem; font-weight: 600; text-transform: uppercase; color: var(--muted-foreground); }
+        .code-block-body { border-radius: 0 0 0.5rem 0.5rem; border: 1px solid var(--border); border-top: 0; overflow-x: auto; }
+        .code-block-body pre { margin: 0 !important; }
+        .code-block-body code.hljs { padding: 1rem !important; background: transparent !important; }
+        .dark .code-block-body { background: #282c34; }
+        .code-block-body { background: color-mix(in oklch, var(--muted) 30%, transparent); }
+
+        .copy-btn {
+            display: inline-flex; align-items: center; justify-content: center;
+            width: 28px; height: 28px; border-radius: 4px; border: none;
+            background: transparent; color: var(--muted-foreground); cursor: pointer;
+            opacity: 0; transition: opacity 0.15s, background 0.15s;
+        }
+        .code-block-wrapper:hover .copy-btn { opacity: 1; }
+        .copy-btn:hover { background: var(--accent); color: var(--accent-foreground); }
     </style>
 </head>
-<body class="bg-background text-foreground min-h-screen flex items-center justify-center antialiased sm:p-4">
-    <div class="w-full max-w-3xl h-screen sm:h-[90vh] flex flex-col bg-card shadow-lg sm:rounded-xl sm:border sm:border-border">
-        <header class="flex items-center justify-between gap-4 px-6 py-4 border-b border-border bg-card sm:rounded-t-xl">
-            <h1 class="text-lg font-semibold leading-none tracking-tight text-card-foreground">
-                Text Analysis
-            </h1>
-            <div class="flex items-center gap-2">
-                <button
-                    id="themeToggle"
-                    type="button"
-                    class="inline-flex items-center justify-center size-9 rounded-md text-sm font-medium
+<body class="bg-background text-foreground h-screen overflow-hidden flex flex-col antialiased">
+
+    <!-- ── Sidebar ── -->
+    <aside id="sidebar" class="fixed left-0 top-0 h-full bg-card border-r z-40 flex flex-col
+                                -translate-x-full transition-all duration-300 ease-in-out"
+           style="width:300px;min-width:300px">
+        <!-- Sidebar header -->
+        <div class="flex items-center justify-between h-14 px-4 border-b border-border">
+            <h2 class="text-sm font-semibold text-foreground">Chat History</h2>
+            <button id="sidebarCloseBtn" type="button"
+                    class="inline-flex items-center justify-center size-8 rounded-md
+                           hover:bg-accent hover:text-accent-foreground cursor-pointer
+                           transition-colors md:hidden"
+                    aria-label="Close sidebar">
+                <svg class="size-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
+                </svg>
+            </button>
+        </div>
+        <!-- New chat button -->
+        <div class="px-4 py-3">
+            <button id="newChatBtn" type="button"
+                    class="w-full inline-flex items-center justify-center gap-2 h-9 px-4 rounded-md
+                           bg-primary text-primary-foreground text-sm font-medium cursor-pointer
+                           shadow-xs transition-all hover:bg-primary/90
+                           outline-none focus-visible:ring-ring/50 focus-visible:ring-[3px]">
+                <svg class="size-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/>
+                </svg>
+                New Chat
+            </button>
+        </div>
+        <!-- Conversation list -->
+        <div id="conversationList" class="flex-1 overflow-y-auto custom-scrollbar px-3 py-1 space-y-0.5">
+            <!-- Rendered by JS -->
+        </div>
+    </aside>
+
+    <!-- Sidebar overlay (mobile) -->
+    <div id="sidebarOverlay" class="fixed inset-0 bg-black/30 z-30 hidden" aria-hidden="true"></div>
+
+    <!-- ── Header ── -->
+    <header id="appHeader" class="fixed top-0 left-0 right-0 z-20 flex items-center justify-between gap-4 px-4 h-14 border-b border-border bg-card/95 backdrop-blur
+                                   transition-all duration-300">
+        <div class="flex items-center gap-3">
+            <!-- Sidebar toggle -->
+            <button id="sidebarToggleBtn" type="button"
+                    class="inline-flex items-center justify-center size-9 rounded-md
+                           hover:bg-accent hover:text-accent-foreground cursor-pointer
+                           transition-colors outline-none"
+                    aria-label="Toggle sidebar">
+                <svg class="size-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5"/>
+                </svg>
+            </button>
+            <!-- Logo -->
+            <div class="h-9 w-9 rounded-lg bg-gradient-to-br from-primary to-primary/80 flex items-center justify-center">
+                <svg class="size-5 text-primary-foreground" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.455 2.456L21.75 6l-1.036.259a3.375 3.375 0 00-2.455 2.456z"/>
+                </svg>
+            </div>
+            <div>
+                <h1 class="text-lg font-bold leading-none text-foreground">Text Analysis</h1>
+                <p class="text-xs text-muted-foreground">Powered by Multiple LLMs</p>
+            </div>
+        </div>
+        <div class="flex items-center gap-1">
+            <button id="themeToggle" type="button"
+                    class="inline-flex items-center justify-center size-9 rounded-full text-sm font-medium
                            transition-all hover:bg-accent hover:text-accent-foreground cursor-pointer
                            outline-none focus-visible:ring-ring/50 focus-visible:ring-[3px]"
-                    aria-label="Toggle dark mode"
-                >
-                    <svg id="sunIcon" class="hidden size-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 3v2.25m6.364.386l-1.591 1.591M21 12h-2.25m-.386 6.364l-1.591-1.591M12 18.75V21m-4.773-4.227l-1.591 1.591M5.25 12H3m4.227-4.773L5.636 5.636M15.75 12a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0z"/>
+                    aria-label="Toggle dark mode">
+                <svg id="sunIcon" class="hidden size-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 3v2.25m6.364.386l-1.591 1.591M21 12h-2.25m-.386 6.364l-1.591-1.591M12 18.75V21m-4.773-4.227l-1.591 1.591M5.25 12H3m4.227-4.773L5.636 5.636M15.75 12a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0z"/>
+                </svg>
+                <svg id="moonIcon" class="size-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M21.752 15.002A9.718 9.718 0 0118 15.75c-5.385 0-9.75-4.365-9.75-9.75 0-1.33.266-2.597.748-3.752A9.753 9.753 0 003 11.25C3 16.635 7.365 21 12.75 21a9.753 9.753 0 009.002-5.998z"/>
+                </svg>
+            </button>
+        </div>
+    </header>
+
+    <!-- ── Messages area ── -->
+    <main id="chatMessages" class="flex-1 min-h-0 overflow-y-auto pt-14 pb-36 px-4 custom-scrollbar
+                                    transition-all duration-300">
+        <div id="messagesContainer" class="max-w-4xl mx-auto py-6">
+            <div id="emptyState" class="flex flex-col items-center justify-center min-h-[60vh] gap-4">
+                <div class="h-16 w-16 rounded-full bg-muted flex items-center justify-center">
+                    <svg class="size-8 text-muted-foreground/50" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M8.625 12a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0H8.25m4.125 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0H12m4.125 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0h-.375M21 12c0 4.556-4.03 8.25-9 8.25a9.764 9.764 0 01-2.555-.337A5.972 5.972 0 015.41 20.97a5.969 5.969 0 01-.474-.065 4.48 4.48 0 00.978-2.025c.09-.457-.133-.901-.467-1.226C3.93 16.178 3 14.189 3 12c0-4.556 4.03-8.25 9-8.25s9 3.694 9 8.25z"/>
                     </svg>
-                    <svg id="moonIcon" class="size-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M21.752 15.002A9.718 9.718 0 0118 15.75c-5.385 0-9.75-4.365-9.75-9.75 0-1.33.266-2.597.748-3.752A9.753 9.753 0 003 11.25C3 16.635 7.365 21 12.75 21a9.753 9.753 0 009.002-5.998z"/>
+                </div>
+                <div class="text-center">
+                    <h2 class="text-2xl font-semibold text-foreground">Welcome to Text Analysis</h2>
+                    <p class="text-sm text-muted-foreground mt-1">Start a conversation to analyze text with AI.</p>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- ── Input area — floating card ── -->
+    <div id="inputArea" class="fixed bottom-4 left-1/2 -translate-x-1/2 w-full max-w-3xl px-4 z-10
+                                transition-all duration-300">
+        <div class="absolute -inset-0.5 bg-gradient-to-r from-primary/10 via-primary/5 to-primary/10 blur-md opacity-40 rounded-2xl pointer-events-none"></div>
+        <div class="relative border border-border/50 bg-card backdrop-blur-md shadow-sm rounded-2xl">
+            <form id="chatForm" class="flex items-end gap-1 px-2 py-2">
+                <textarea
+                    id="messageInput"
+                    placeholder="Type your message..."
+                    rows="1"
+                    autofocus
+                    class="flex-1 min-h-[52px] max-h-[200px] resize-none border-0 bg-transparent
+                           pl-3 pr-2 py-3 text-sm leading-relaxed
+                           outline-none placeholder:text-muted-foreground
+                           disabled:cursor-not-allowed disabled:opacity-50"
+                ></textarea>
+                <button
+                    type="submit"
+                    id="sendBtn"
+                    class="inline-flex items-center justify-center shrink-0
+                           h-10 w-10 rounded-full cursor-pointer
+                           bg-primary text-primary-foreground
+                           shadow-xs transition-all
+                           hover:bg-primary/90
+                           outline-none focus-visible:ring-ring/50 focus-visible:ring-[3px]
+                           disabled:pointer-events-none disabled:opacity-50"
+                >
+                    <svg class="size-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 10.5L12 3m0 0l7.5 7.5M12 3v18"/>
                     </svg>
                 </button>
+            </form>
+            <div class="border-t border-border/50 px-3 py-1.5 flex items-center">
                 <select
                     id="modelSelect"
                     disabled
-                    class="flex h-9 items-center justify-between rounded-md border border-input
-                           bg-transparent px-3 py-2 text-sm shadow-xs
-                           transition-[color,box-shadow] outline-none
-                           focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px]
-                           disabled:cursor-not-allowed disabled:opacity-50
-                           max-w-[280px]"
+                    class="h-7 appearance-none border-0 bg-transparent
+                           px-2 py-1 text-xs text-muted-foreground
+                           outline-none cursor-pointer
+                           hover:text-foreground transition-colors
+                           disabled:cursor-not-allowed disabled:opacity-50"
                 >
                     <option>Loading models...</option>
                 </select>
             </div>
-        </header>
-
-        <div id="chatMessages" class="flex-1 overflow-y-auto p-6 flex flex-col gap-4 scroll-smooth">
-            <div id="emptyState" class="flex-1 flex items-center justify-center">
-                <p class="text-muted-foreground text-sm">Send a message to start a conversation.</p>
-            </div>
         </div>
-
-        <form id="chatForm" class="flex gap-3 px-6 py-4 border-t border-border bg-card sm:rounded-b-xl">
-            <textarea
-                id="messageInput"
-                placeholder="Type your message..."
-                rows="1"
-                autofocus
-                class="flex-1 min-h-[40px] max-h-[120px] resize-none rounded-md border border-input
-                       bg-transparent px-3 py-2 text-[15px] leading-relaxed
-                       shadow-xs transition-[color,box-shadow] outline-none
-                       placeholder:text-muted-foreground
-                       focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px]
-                       disabled:cursor-not-allowed disabled:opacity-50"
-            ></textarea>
-            <button
-                type="submit"
-                id="sendBtn"
-                class="inline-flex items-center justify-center self-end
-                       h-9 px-4 py-2 rounded-md cursor-pointer
-                       bg-primary text-primary-foreground text-sm font-medium
-                       shadow-xs transition-all
-                       hover:bg-primary/90
-                       outline-none focus-visible:ring-ring/50 focus-visible:ring-[3px]
-                       disabled:pointer-events-none disabled:opacity-50"
-            >
-                Send
-            </button>
-        </form>
     </div>
 
+    <!-- Libraries -->
+    <script src="https://cdn.jsdelivr.net/npm/marked@15/marked.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/highlight.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/katex@0.16/dist/katex.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/katex@0.16/dist/contrib/auto-render.min.js"></script>
     <script src="/static/js/app.js"></script>
 </body>
 </html>

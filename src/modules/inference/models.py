@@ -6,12 +6,13 @@ class ModelInfo:
     id: str
     name: str
     provider: str
+    max_tokens: int = 16384  # default; override per model as needed
 
 
 ALLOWED_MODELS: dict[str, ModelInfo] = {m.id: m for m in [
     # Meta — Llama 4
-    ModelInfo("meta-llama/Llama-4-Scout-17B-16E-Instruct", "Llama 4 Scout", "Meta"),
-    ModelInfo("meta-llama/Llama-4-Maverick-17B-128E-Instruct", "Llama 4 Maverick", "Meta"),
+    ModelInfo("meta-llama/Llama-4-Scout-17B-16E-Instruct", "Llama 4 Scout", "Meta", max_tokens=8192),
+    ModelInfo("meta-llama/Llama-4-Maverick-17B-128E-Instruct", "Llama 4 Maverick", "Meta", max_tokens=8192),
 
     # Qwen — Qwen 3
     ModelInfo("Qwen/Qwen3-235B-A22B-Instruct-2507", "Qwen 3 235B", "Alibaba"),
@@ -21,10 +22,10 @@ ALLOWED_MODELS: dict[str, ModelInfo] = {m.id: m for m in [
     ModelInfo("deepseek-ai/DeepSeek-V3", "DeepSeek V3", "DeepSeek"),
 
     # Google — Gemma 3
-    ModelInfo("google/gemma-3-27b-it", "Gemma 3 27B", "Google"),
+    ModelInfo("google/gemma-3-27b-it", "Gemma 3 27B", "Google", max_tokens=8192),
 
     # Meta — Llama 3
-    ModelInfo("meta-llama/Llama-3.3-70B-Instruct", "Llama 3.3 70B", "Meta"),
+    ModelInfo("meta-llama/Llama-3.3-70B-Instruct", "Llama 3.3 70B", "Meta", max_tokens=8192),
 ]}
 
 DEFAULT_MODEL = "meta-llama/Llama-4-Scout-17B-16E-Instruct"

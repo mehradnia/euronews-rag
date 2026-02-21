@@ -5,9 +5,8 @@ from pathlib import Path
 from fastapi import FastAPI
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
-from sqlalchemy import text
-
-from src.config.database import engine
+from src.config.database import Base, engine
+from src.modules.conversation.router import router as conversation_router
 from src.modules.inference.router import router as inference_router
 
 logger = logging.getLogger(__name__)
@@ -15,9 +14,11 @@ logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    import src.modules.conversation.models  # noqa: F401 — register ORM models
+
     async with engine.begin() as conn:
-        await conn.execute(text("SELECT 1"))
-    logger.info("Database connection established")
+        await conn.run_sync(Base.metadata.create_all)
+    logger.info("Database tables synced")
     yield
     await engine.dispose()
 
@@ -26,6 +27,7 @@ app = FastAPI(title="Text Analysis", lifespan=lifespan)
 
 # API routes
 app.include_router(inference_router, prefix="/api/inference", tags=["inference"])
+app.include_router(conversation_router, prefix="/api/conversation", tags=["conversation"])
 
 # Static files
 static_dir = Path(__file__).parent / "static"
