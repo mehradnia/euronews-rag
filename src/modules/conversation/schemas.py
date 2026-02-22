@@ -14,6 +14,7 @@ class MessageResponse(BaseModel):
     role: str
     model_id: str | None = None
     content: str
+    sources: list | None = None
     created_at: datetime
 
     model_config = {"from_attributes": True}

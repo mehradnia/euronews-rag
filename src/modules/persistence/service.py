@@ -62,6 +62,7 @@ class PersistenceService(ConversationContract, DocumentContract, VectorSearchCon
         role: str,
         content: str,
         model_id: str | None = None,
+        sources: list | None = None,
     ) -> Message | None:
         async with async_session() as session:
             conversation = await session.get(Conversation, conversation_id)
@@ -72,6 +73,7 @@ class PersistenceService(ConversationContract, DocumentContract, VectorSearchCon
                 role=role,
                 content=content,
                 model_id=model_id,
+                sources=sources,
             )
             session.add(message)
             await session.commit()
@@ -168,6 +170,7 @@ class PersistenceService(ConversationContract, DocumentContract, VectorSearchCon
                         similarity=1 - dist,
                         document_title=document.title,
                         document_url=document.url,
+                        document_content=document.content,
                         document_category=document.category,
                         document_publication_date=document.publication_date,
                     )

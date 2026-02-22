@@ -1,3 +1,4 @@
+import asyncio
 import logging
 from datetime import datetime
 
@@ -47,7 +48,7 @@ class DataCollectorPipelineService:
         logger.info("Embed step completed")
 
     async def start(self) -> None:
-        await self._composer.run()
+        asyncio.create_task(self._composer.run())
         self._scheduler.add_job(
             self._composer.run,
             CronTrigger(hour=3, minute=0),

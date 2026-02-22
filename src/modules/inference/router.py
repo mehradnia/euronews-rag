@@ -4,6 +4,7 @@ import logging
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
 
+from src.modules.embedder.service import embedder_service
 from src.modules.inference.models import ALLOWED_MODELS, DEFAULT_MODEL, is_model_allowed
 from src.modules.inference.schemas import ChatRequest, ModelResponse
 from src.modules.inference.service import inference_service
@@ -12,6 +13,26 @@ from src.modules.persistence.service import persistence_service
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+SYSTEM_PROMPT_TEMPLATE = """\
+You are a helpful assistant that answers questions based on the provided context from news articles.
+Use the following context to answer the user's question. If the context doesn't contain relevant information, say so.
+
+Context:
+{context}"""
+
+
+def _build_context(sources) -> str:
+    blocks: list[str] = []
+    for s in sources:
+        meta_parts = [s.document_title]
+        if s.document_category:
+            meta_parts.append(s.document_category)
+        if s.document_publication_date:
+            meta_parts.append(s.document_publication_date.strftime("%Y-%m-%d"))
+        header = " | ".join(meta_parts)
+        blocks.append(f"---\n{header}\nURL: {s.document_url}\n{s.chunk_content}\n---")
+    return "\n\n".join(blocks)
 
 
 @router.get("/models")
@@ -39,13 +60,53 @@ async def chat(request: ChatRequest) -> StreamingResponse:
     model_info = ALLOWED_MODELS[request.model_id]
     max_tokens = min(request.max_tokens, model_info.max_tokens)
 
-    # No memory — only send the current user message
-    messages = [{"role": "user", "content": request.content}]
+    # RAG retrieval
+    query_embedding = await embedder_service.embed_query(request.content)
+    sources = await persistence_service.search_similar(query_embedding, limit=request.top_k)
+    logger.info("Retrieved %d chunks for query", len(sources))
+
+    # Build messages with context + conversation history
+    context = _build_context(sources)
+    system_prompt = SYSTEM_PROMPT_TEMPLATE.format(context=context)
+    history = [
+        {"role": msg.role, "content": msg.content}
+        for msg in (conversation.messages or [])
+        if msg.role in ("user", "assistant")
+    ][-10:]
+    messages = [
+        {"role": "system", "content": system_prompt},
+        *history,
+        {"role": "user", "content": request.content},
+    ]
 
     # Persist user message
     await persistence_service.add_message(
         request.conversation_id, role="user", content=request.content
     )
+
+    # Group sources by document (deduplicate, keep all chunks per doc)
+    doc_map: dict[str, dict] = {}
+    for s in sources:
+        url = s.document_url
+        if url not in doc_map:
+            doc_map[url] = {
+                "document_title": s.document_title,
+                "document_url": url,
+                "document_content": s.document_content,
+                "document_category": s.document_category,
+                "document_publication_date": (
+                    s.document_publication_date.isoformat()
+                    if s.document_publication_date
+                    else None
+                ),
+                "chunks": [],
+            }
+        doc_map[url]["chunks"].append({
+            "content": s.chunk_content,
+            "chunk_index": s.chunk_index,
+            "similarity": round(s.similarity, 4),
+        })
+    sources_payload = list(doc_map.values())
 
     async def event_stream():
         full_response: list[str] = []
@@ -67,7 +128,9 @@ async def chat(request: ChatRequest) -> StreamingResponse:
                 await persistence_service.add_message(
                     request.conversation_id, role="assistant",
                     content=assistant_content, model_id=request.model_id,
+                    sources=sources_payload,
                 )
+        yield f"data: {json.dumps({'sources': sources_payload})}\n\n"
         yield "data: [DONE]\n\n"
 
     return StreamingResponse(

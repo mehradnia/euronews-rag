@@ -89,6 +89,10 @@
         .custom-scrollbar::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
         .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: var(--muted-foreground); }
 
+        /* Hide scrollbar for suggestions row */
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
         /* ── Chat markdown (mirrors PiPro globals.css) ── */
         .chat-markdown {
             max-width: 100%;
@@ -338,7 +342,7 @@
                     </svg>
                 </button>
             </form>
-            <div class="border-t border-border/50 px-3 py-1.5 flex items-center">
+            <div class="border-t border-border/50 px-3 py-1.5 flex items-center gap-3">
                 <select
                     id="modelSelect"
                     disabled
@@ -350,6 +354,22 @@
                 >
                     <option>Loading models...</option>
                 </select>
+                <div class="flex items-center gap-1.5 text-xs text-muted-foreground">
+                    <label for="topKSelect" class="whitespace-nowrap">Sources:</label>
+                    <select
+                        id="topKSelect"
+                        class="h-7 appearance-none border-0 bg-transparent
+                               px-1 py-1 text-xs text-muted-foreground
+                               outline-none cursor-pointer
+                               hover:text-foreground transition-colors"
+                    >
+                        <option value="3">3</option>
+                        <option value="5" selected>5</option>
+                        <option value="10">10</option>
+                        <option value="15">15</option>
+                        <option value="20">20</option>
+                    </select>
+                </div>
             </div>
         </div>
     </div>

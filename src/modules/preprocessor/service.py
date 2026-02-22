@@ -13,8 +13,8 @@ from src.modules.scraper.schemas import ScrapedArticle
 
 logger = logging.getLogger(__name__)
 
-CHUNK_SIZE = 512
-CHUNK_OVERLAP = 50
+CHUNK_SIZE = 1000
+CHUNK_OVERLAP = 150
 MIN_CONTENT_LENGTH = 50
 
 
@@ -69,11 +69,12 @@ class PreprocessorService:
     def _chunk(self, articles: list[ScrapedArticle]) -> list[ProcessedChunk]:
         chunks: list[ProcessedChunk] = []
         for article in articles:
+            prefix = f"{article.title}: "
             splits = self._splitter.split_text(article.content)
             for i, text in enumerate(splits):
                 chunks.append(
                     ProcessedChunk(
-                        content=text,
+                        content=prefix + text,
                         title=article.title,
                         url=article.url,
                         category=article.category,

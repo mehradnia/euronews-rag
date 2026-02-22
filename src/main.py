@@ -23,6 +23,13 @@ async def lifespan(app: FastAPI):
     async with engine.begin() as conn:
         await conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
         await conn.run_sync(Base.metadata.create_all)
+        await conn.execute(text("""
+            DO $$ BEGIN
+                ALTER TABLE messages ADD COLUMN sources JSONB;
+            EXCEPTION
+                WHEN duplicate_column THEN NULL;
+            END $$;
+        """))
     logger.info("Database tables synced")
 
     await data_collector_pipeline_service.start()

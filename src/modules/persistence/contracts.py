@@ -27,6 +27,7 @@ class ConversationContract(ABC):
         role: str,
         content: str,
         model_id: str | None = None,
+        sources: list | None = None,
     ) -> object | None: ...
 
 

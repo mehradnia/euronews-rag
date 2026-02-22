@@ -125,6 +125,46 @@ class ScraperService:
         return 1 if items else 0
 
     @staticmethod
+    def _extract_presscorner_ref(url: str) -> str | None:
+        """Extract reference like 'IP/26/184' from a presscorner URL."""
+        match = re.search(r"/detail/\w+/(\w+)_(\d+)_(\d+)", url)
+        if match:
+            return f"{match.group(1).upper()}/{match.group(2)}/{match.group(3)}"
+        return None
+
+    async def _fetch_presscorner_content(
+        self, client: httpx.AsyncClient, url: str
+    ) -> tuple[str, str] | None:
+        """Fetch full content from the presscorner JSON API. Returns (title, content)."""
+        ref = self._extract_presscorner_ref(url)
+        if not ref:
+            return None
+        api_url = (
+            f"https://ec.europa.eu/commission/presscorner/api/documents"
+            f"?reference={ref}&language=en"
+        )
+        try:
+            await asyncio.sleep(REQUEST_DELAY)
+            response = await client.get(
+                api_url, headers=_HEADERS, timeout=REQUEST_TIMEOUT
+            )
+            response.raise_for_status()
+            data = response.json()
+            doc = data.get("docuLanguageResource", {})
+            html_content = doc.get("htmlContent", "")
+            title = doc.get("title", "")
+            if html_content:
+                soup = BeautifulSoup(html_content, "lxml")
+                paragraphs = soup.find_all("p")
+                content = "\n\n".join(
+                    p.get_text(strip=True) for p in paragraphs if p.get_text(strip=True)
+                )
+                return title, content
+        except Exception:
+            logger.warning("Presscorner API fallback failed for %s", url)
+        return None
+
+    @staticmethod
     def _parse_article_page(html: str, list_item: ArticleListItem) -> ScrapedArticle:
         soup = BeautifulSoup(html, "lxml")
 
@@ -168,7 +208,7 @@ class ScraperService:
         else:
             content = ""
 
-        # Fallback for SPA pages (presscorner): use meta description
+        # Fallback for SPA pages: use meta description
         if not content:
             meta_desc = soup.find("meta", property="og:description") or soup.find(
                 "meta", attrs={"name": "description"}
@@ -233,7 +273,34 @@ class ScraperService:
                 async with semaphore:
                     try:
                         html = await self._fetch(client, item.url)
-                        return self._parse_article_page(html, item)
+                        article = self._parse_article_page(html, item)
+
+                        # Fallback 1: language suffix — pages without _en
+                        # redirect to a language-picker with no content
+                        if (
+                            len(article.content) < 300
+                            and "presscorner" not in item.url
+                            and not re.search(r"_[a-z]{2}$", item.url)
+                        ):
+                            en_url = f"{item.url}_en"
+                            logger.info("Retrying with language suffix: %s", en_url)
+                            html = await self._fetch(client, en_url)
+                            article = self._parse_article_page(html, item)
+
+                        # Fallback 2: presscorner JSON API for SPA press pages
+                        if len(article.content) < 300 and "presscorner" in item.url:
+                            result = await self._fetch_presscorner_content(client, item.url)
+                            if result:
+                                title, content = result
+                                article.content = content
+                                if title:
+                                    article.title = title
+                                logger.info(
+                                    "Presscorner API enriched %s (%d chars)",
+                                    item.url, len(content),
+                                )
+
+                        return article
                     except Exception:
                         logger.exception("Failed article %s", item.url)
                         return None

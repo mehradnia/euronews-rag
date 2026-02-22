@@ -14,9 +14,86 @@ const chatForm = document.getElementById("chatForm");
 const messageInput = document.getElementById("messageInput");
 const sendBtn = document.getElementById("sendBtn");
 const modelSelect = document.getElementById("modelSelect");
+const topKSelect = document.getElementById("topKSelect");
 const themeToggle = document.getElementById("themeToggle");
 const sunIcon = document.getElementById("sunIcon");
 const moonIcon = document.getElementById("moonIcon");
+
+// ── Suggested questions ──
+
+const SUGGESTED_QUESTIONS = [
+    "What is the EU's new plan to counter drone threats?",
+    "What are the key terms of the EU-India Free Trade Agreement?",
+    "What is the EU-Singapore Digital Trade Agreement about?",
+    "How much funding has the EU allocated to the crisis in Myanmar?",
+    "What is the EU's five-year strategy on migration?",
+    "What factors affect electricity bills in the EU?",
+];
+
+// Build suggestions panel (positioned above input card)
+const suggestionsPanel = document.createElement("div");
+suggestionsPanel.id = "suggestionsPanel";
+suggestionsPanel.className =
+    "absolute bottom-full left-0 right-0 px-4 pb-2 opacity-0 pointer-events-none transition-opacity duration-150 z-10";
+inputArea.insertBefore(suggestionsPanel, inputArea.firstChild);
+
+function showSuggestions() {
+    suggestionsPanel.classList.remove("opacity-0", "pointer-events-none");
+    suggestionsPanel.classList.add("opacity-100", "pointer-events-auto");
+}
+
+function hideSuggestions() {
+    suggestionsPanel.classList.remove("opacity-100", "pointer-events-auto");
+    suggestionsPanel.classList.add("opacity-0", "pointer-events-none");
+}
+
+function renderSuggestions(filter) {
+    suggestionsPanel.innerHTML = "";
+    const words = (filter || "").toLowerCase().split(/\s+/).filter(Boolean);
+    const matches = SUGGESTED_QUESTIONS.filter((q) => {
+        if (words.length === 0) return true;
+        const lower = q.toLowerCase();
+        return words.every((w) => lower.includes(w));
+    });
+
+    if (matches.length === 0) {
+        hideSuggestions();
+        return;
+    }
+
+    const wrap = document.createElement("div");
+    wrap.className = "flex gap-1.5 overflow-x-auto no-scrollbar";
+
+    for (const question of matches) {
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className =
+            "shrink-0 px-2.5 py-1 text-[11px] rounded-full border border-border/50 " +
+            "bg-card/80 backdrop-blur text-muted-foreground hover:text-foreground hover:border-primary/40 " +
+            "cursor-pointer transition-colors whitespace-nowrap shadow-xs";
+        btn.textContent = question;
+        btn.addEventListener("mousedown", (e) => {
+            e.preventDefault(); // prevent blur
+            hideSuggestions();
+            messageInput.value = question;
+            sendMessage(question);
+        });
+        wrap.appendChild(btn);
+    }
+
+    suggestionsPanel.appendChild(wrap);
+    showSuggestions();
+}
+
+let blurTimeout = null;
+
+messageInput.addEventListener("focus", () => {
+    renderSuggestions(messageInput.value.trim());
+});
+
+messageInput.addEventListener("blur", () => {
+    blurTimeout = setTimeout(hideSuggestions, 150);
+});
 
 // ── State ──
 
@@ -168,6 +245,93 @@ function renderMarkdown(el, rawText, { streaming = false } = {}) {
     }
 }
 
+// ── Render sources ──
+
+function highlightChunks(docContent, chunks) {
+    // Strip contextual title prefix (e.g. "Title: ") that was added for embedding
+    const stripped = chunks.map(c => {
+        const colonIdx = c.content.indexOf(": ");
+        const raw = colonIdx !== -1 ? c.content.slice(colonIdx + 2) : c.content;
+        return { ...c, content: raw };
+    });
+
+    // Sort chunks by position in document (earliest first)
+    const sorted = stripped
+        .map(c => ({ ...c, idx: docContent.indexOf(c.content) }))
+        .filter(c => c.idx !== -1)
+        .sort((a, b) => a.idx - b.idx);
+
+    if (sorted.length === 0) return wrapParagraphs(escapeHtml(docContent));
+
+    let html = "";
+    let cursor = 0;
+    for (const chunk of sorted) {
+        if (chunk.idx < cursor) continue; // overlapping
+        html += escapeHtml(docContent.slice(cursor, chunk.idx));
+        html += `<mark class="bg-primary/15 text-foreground rounded px-0.5">${escapeHtml(chunk.content)}</mark>`;
+        cursor = chunk.idx + chunk.content.length;
+    }
+    html += escapeHtml(docContent.slice(cursor));
+    return wrapParagraphs(html);
+}
+
+function wrapParagraphs(html) {
+    return html
+        .split(/\n{2,}/)
+        .map(p => `<p class="mb-2">${p.trim()}</p>`)
+        .join("");
+}
+
+function renderSources(wrapper, sources) {
+    const outer = document.createElement("details");
+    outer.className = "sources-block mt-3 mb-1 border border-border rounded-lg overflow-hidden";
+
+    const summary = document.createElement("summary");
+    summary.className =
+        "flex items-center gap-2 px-3 py-2 text-xs font-medium text-muted-foreground cursor-pointer select-none hover:bg-muted/30 transition-colors";
+    summary.innerHTML = `
+        <svg class="size-3.5 shrink-0" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z"/>
+        </svg>
+        Sources (${sources.length} documents)`;
+    outer.appendChild(summary);
+
+    const list = document.createElement("div");
+    list.className = "divide-y divide-border";
+
+    for (const doc of sources) {
+        const item = document.createElement("div");
+        item.className = "px-3 py-2.5 text-xs";
+
+        // Header: title + meta
+        const meta = [];
+        if (doc.document_category) meta.push(doc.document_category);
+        if (doc.document_publication_date) {
+            meta.push(new Date(doc.document_publication_date).toLocaleDateString());
+        }
+        const bestMatch = Math.max(...doc.chunks.map(c => c.similarity));
+        meta.push(`${Math.round(bestMatch * 100)}% match`);
+
+        const header = document.createElement("div");
+        header.innerHTML = `
+            <a href="${escapeHtml(doc.document_url)}" target="_blank" rel="noopener noreferrer"
+               class="font-medium text-primary hover:underline">${escapeHtml(doc.document_title)}</a>
+            <div class="text-muted-foreground mt-0.5">${escapeHtml(meta.join(" \u00B7 "))}</div>`;
+        item.appendChild(header);
+
+        // Document content with highlighted chunks
+        const contentEl = document.createElement("div");
+        contentEl.className = "mt-2 text-xs leading-relaxed text-muted-foreground max-h-48 overflow-y-auto";
+        contentEl.innerHTML = highlightChunks(doc.document_content, doc.chunks);
+        item.appendChild(contentEl);
+
+        list.appendChild(item);
+    }
+
+    outer.appendChild(list);
+    wrapper.appendChild(outer);
+}
+
 // ── Send / Stop button state ──
 
 const SEND_ICON = `<svg class="size-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M4.5 10.5L12 3m0 0l7.5 7.5M12 3v18"/></svg>`;
@@ -175,6 +339,7 @@ const STOP_ICON = `<svg class="size-3.5" xmlns="http://www.w3.org/2000/svg" view
 
 function setStreamingUI(streaming) {
     if (streaming) {
+        hideSuggestions();
         sendBtn.innerHTML = STOP_ICON;
         sendBtn.disabled = false;
         sendBtn.classList.remove("bg-primary");
@@ -335,6 +500,9 @@ async function loadConversation(id) {
         } else {
             const contentDiv = appendMessage("assistant", "", msg.model_id);
             renderMarkdown(contentDiv, msg.content);
+            if (msg.sources && msg.sources.length > 0) {
+                renderSources(contentDiv.parentElement, msg.sources);
+            }
         }
     }
     scrollToBottom();
@@ -529,6 +697,7 @@ messageInput.addEventListener("keydown", (e) => {
 messageInput.addEventListener("input", () => {
     messageInput.style.height = "auto";
     messageInput.style.height = messageInput.scrollHeight + "px";
+    renderSuggestions(messageInput.value.trim());
 });
 
 newChatBtn.addEventListener("click", () => {
@@ -570,6 +739,7 @@ async function sendMessage(text) {
     const contentDiv = appendMessage("assistant", "", modelSelect.value);
     contentDiv.innerHTML = TYPING_INDICATOR;
     let fullResponse = "";
+    let sources = null;
 
     try {
         const response = await fetch("/api/inference/chat", {
@@ -579,6 +749,7 @@ async function sendMessage(text) {
                 conversation_id: currentConversationId,
                 content: text,
                 model_id: modelSelect.value,
+                top_k: parseInt(topKSelect.value, 10),
             }),
             signal: abortController.signal,
         });
@@ -627,6 +798,10 @@ async function sendMessage(text) {
                         contentDiv.textContent = `Error: ${parsed.error}`;
                         return;
                     }
+                    if (parsed.sources) {
+                        sources = parsed.sources;
+                        continue;
+                    }
                     fullResponse += parsed.token;
                     scheduleRender();
                 } catch {
@@ -638,10 +813,16 @@ async function sendMessage(text) {
         // Final render to ensure complete markdown
         if (fullResponse) {
             renderMarkdown(contentDiv, fullResponse);
-            scrollToBottom();
         } else {
             contentDiv.textContent = "No response received from the model.";
         }
+
+        // Render sources below the response
+        if (sources && sources.length > 0) {
+            renderSources(contentDiv.parentElement, sources);
+        }
+
+        scrollToBottom();
 
         // Refresh conversation list to update ordering
         fetchConversations();
@@ -700,6 +881,11 @@ async function init() {
     // Open sidebar by default on desktop
     if (isDesktop() && localStorage.getItem("sidebarOpen") !== "0") {
         setSidebar(true);
+    }
+
+    // Show suggestions if input is already focused (autofocus on reload)
+    if (document.activeElement === messageInput) {
+        renderSuggestions(messageInput.value.trim());
     }
 }
 

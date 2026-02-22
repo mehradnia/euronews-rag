@@ -14,6 +14,9 @@ class EmbedderService:
     def __init__(self) -> None:
         self._embeddings = HuggingFaceEmbeddings(model_name=EMBEDDING_MODEL)
 
+    async def embed_query(self, text: str) -> list[float]:
+        return self._embeddings.embed_query(text)
+
     async def embed(self, chunks: list[ProcessedChunk]) -> list[list[float]]:
         texts = [chunk.content for chunk in chunks]
 
