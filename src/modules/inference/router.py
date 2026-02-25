@@ -23,15 +23,20 @@ Context:
 
 
 def _build_context(sources) -> str:
+    # Deduplicate by document URL — use full document content, not just the chunk
+    seen: set[str] = set()
     blocks: list[str] = []
     for s in sources:
+        if s.document_url in seen:
+            continue
+        seen.add(s.document_url)
         meta_parts = [s.document_title]
         if s.document_category:
             meta_parts.append(s.document_category)
         if s.document_publication_date:
             meta_parts.append(s.document_publication_date.strftime("%Y-%m-%d"))
         header = " | ".join(meta_parts)
-        blocks.append(f"---\n{header}\nURL: {s.document_url}\n{s.chunk_content}\n---")
+        blocks.append(f"---\n{header}\nURL: {s.document_url}\n{s.document_content}\n---")
     return "\n\n".join(blocks)
 
 

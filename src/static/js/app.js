@@ -379,7 +379,7 @@ const EMPTY_STATE_HTML = `
             </svg>
         </div>
         <div class="text-center">
-            <h2 class="text-2xl font-semibold text-foreground">Welcome to Text Analysis</h2>
+            <h2 class="text-2xl font-semibold text-foreground">Welcome to Euronews Chatbot</h2>
             <p class="text-sm text-muted-foreground mt-1">Start a conversation to analyze text with AI.</p>
         </div>
     </div>`;
